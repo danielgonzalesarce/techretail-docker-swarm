@@ -1,0 +1,104 @@
+version: "3.8"
+
+services:
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    networks:
+      - techretail_net
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/nginx.conf
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  backend:
+    image: techretail_project-backend:latest
+    networks:
+      - techretail_net
+    environment:
+      DB_HOST: database
+      DB_USER: techretail_user
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      DB_NAME: techretail_db
+      REDIS_HOST: cache
+      REDIS_PORT: 6379
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
+      PORT: 3000
+    secrets:
+      - db_password
+      - source: db_password
+        target: redis_password
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  database:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_password
+      MYSQL_DATABASE: techretail_db
+      MYSQL_USER: techretail_user
+      MYSQL_PASSWORD_FILE: /run/secrets/db_password
+    networks:
+      - techretail_net
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    secrets:
+      - db_password
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  cache:
+    image: redis:7-alpine
+    command: sh -c "echo 'requirepass '$$(cat /run/secrets/redis_password) > /tmp/redis.conf && redis-server /tmp/redis.conf"
+    networks:
+      - techretail_net
+    volumes:
+      - redis_data:/data
+    secrets:
+      - source: db_password
+        target: redis_password
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  visualizer:
+    image: dockersamples/visualizer
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - techretail_net
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+networks:
+  techretail_net:
+    driver: overlay
+
+volumes:
+  db_data:
+  redis_data:
+
+secrets:
+  db_password:
+    external: true
+
+configs:
+  nginx_config:
+    file: ./frontend/nginx.conf

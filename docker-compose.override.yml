@@ -1,0 +1,46 @@
+# Docker Compose override para desarrollo local
+# Este archivo se usa junto con docker-compose.yml para desarrollo local
+# Uso: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+
+version: "3.8"
+
+services:
+  frontend:
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    deploy:
+      replicas: 1  # Solo 1 réplica para desarrollo
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DB_PASSWORD: techretail_pass
+      REDIS_PASSWORD: techretail_redis_123
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    deploy:
+      replicas: 1  # Solo 1 réplica para desarrollo
+    secrets: []  # Remover secrets para desarrollo local
+
+  database:
+    environment:
+      MYSQL_ROOT_PASSWORD: techretail_pass
+      MYSQL_PASSWORD: techretail_pass
+    ports:
+      - "3306:3306"
+    secrets: []  # Remover secrets para desarrollo local
+
+  cache:
+    command: redis-server --requirepass techretail_redis_123
+    ports:
+      - "6379:6379"
+    secrets: []  # Remover secrets para desarrollo local
+
+  visualizer:
+    ports:
+      - "8080:8080"
